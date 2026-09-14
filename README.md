@@ -2,7 +2,7 @@
 
 InNet is an insurance-aware care finder. It reads a Summary of Benefits and Coverage (SBC) or Evidence of Coverage (EOC), extracts key plan rules, and ranks provider options by estimated out-of-pocket cost.
 
-**Live website:** https://gvkishorereddy.github.io/innet-care-v1/
+**Live website:** https://venkatabuilds.com/
 
 ## Version 1 features
 
