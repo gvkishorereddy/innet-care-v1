@@ -8,7 +8,7 @@ const supabase = url && key ? createClient(url, key) : null
 export const storageMode = supabase ? 'Supabase' : 'This device'
 
 export async function saveSearch(input: {
-  plan: PlanRules
+  plan: PlanRules | null
   specialty: string
   zip: string
   remainingDeductible: number
@@ -16,11 +16,11 @@ export async function saveSearch(input: {
   const record = { ...input, created_at: new Date().toISOString() }
   if (supabase) {
     const { error } = await supabase.from('care_searches').insert({
-      plan_name: input.plan.planName,
+      plan_name: input.plan?.planName ?? 'No insurance document',
       specialty: input.specialty,
       zip_code: input.zip,
       remaining_deductible: input.remainingDeductible,
-      plan_rules: input.plan,
+      plan_rules: input.plan ?? {},
     })
     if (error) throw error
     return

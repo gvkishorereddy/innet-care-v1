@@ -16,26 +16,25 @@ export type PlanRules = {
   citations: Citation[]
 }
 
-export type Provider = {
-  id: string
+export type DirectoryProvider = {
+  npi: string
   name: string
-  practice: string
+  credential: string
+  providerType: 'individual' | 'organization'
   specialty: string
   address: string
-  distance: number
-  rating: number
-  nextAvailable: string
-  negotiatedRate: number
-  facilityFee: number
-  networkStatus: 'confirmed' | 'likely' | 'out-of-network'
-  acceptingNewPatients: boolean
-  languages: string[]
+  city: string
+  state: string
+  postalCode: string
+  phone: string | null
 }
 
-export type CostEstimate = {
-  provider: Provider
-  low: number
-  high: number
-  explanation: string
-  confidence: 'high' | 'medium' | 'low'
+export type ProviderSearchResponse = {
+  providers: DirectoryProvider[]
+  total: number
+  source: 'CMS NPI Registry'
+  query: {
+    specialty: string
+    zip: string
+  }
 }

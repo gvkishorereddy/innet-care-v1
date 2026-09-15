@@ -1,28 +1,28 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
-  ArrowRight, BadgeCheck, CalendarDays, Check, ChevronDown, CircleDollarSign,
-  Clock3, FileCheck2, FileText, Info, LoaderCircle, LocateFixed, MapPin,
-  Navigation, Phone, Search, ShieldCheck, Sparkles, Star, Stethoscope, UploadCloud,
+  ArrowRight, BadgeCheck, Building2, Check, ChevronDown, CircleDollarSign,
+  Clock3, ExternalLink, FileCheck2, FileText, Info, LoaderCircle, LocateFixed,
+  MapPin, Navigation, Phone, RefreshCw, Search, ShieldCheck, Sparkles,
+  Stethoscope, UploadCloud, UserRound,
 } from 'lucide-react'
-import { providers, specialties } from './data/providers'
-import { rankProviders } from './lib/cost'
 import { extractPdfText, parsePlan, samplePlan } from './lib/pdf'
+import { searchProviders, specialties } from './lib/providers'
 import { saveSearch, storageMode } from './lib/storage'
-import type { CostEstimate, PlanRules } from './types'
+import type { DirectoryProvider, PlanRules } from './types'
 
 type Step = 'plan' | 'search' | 'results'
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
 function Logo() {
-  return <div className="logo"><span className="logo-mark"><Check size={16} strokeWidth={3} /></span><span>InNet</span></div>
+  return <button className="logo logo-button" onClick={() => window.location.reload()} aria-label="Return to InNet home"><span className="logo-mark"><Check size={16} strokeWidth={3} /></span><span>InNet</span></button>
 }
 
 function Progress({ step }: { step: Step }) {
   const active = step === 'plan' ? 1 : step === 'search' ? 2 : 3
   return (
     <div className="progress" aria-label={`Step ${active} of 3`}>
-      {['Understand plan', 'Find care', 'Compare costs'].map((label, index) => (
+      {['Choose coverage', 'Find providers', 'Verify details'].map((label, index) => (
         <div className={`progress-item ${index + 1 <= active ? 'active' : ''}`} key={label}>
           <span>{index + 1 < active ? <Check size={14} strokeWidth={3} /> : index + 1}</span>
           <p>{label}</p>
@@ -39,7 +39,7 @@ function PlanSummary({ plan, onContinue }: { plan: PlanRules; onContinue: () => 
       <div className="success-banner"><FileCheck2 size={20} /><div><strong>Plan understood</strong><span>We found {plan.citations.length} source-backed details</span></div></div>
       <div className="plan-heading">
         <div><span className="eyebrow">Your plan</span><h2>{plan.planName}</h2><p>{plan.networkName}</p></div>
-        <button className="text-button" onClick={() => location.reload()}>Replace PDF</button>
+        <button className="text-button" onClick={() => window.location.reload()}>Replace PDF</button>
       </div>
       <div className="benefit-grid">
         <article><CircleDollarSign /><span>Annual deductible</span><strong>{currency.format(plan.deductible)}</strong></article>
@@ -56,37 +56,40 @@ function PlanSummary({ plan, onContinue }: { plan: PlanRules; onContinue: () => 
           </details>
         ))}
       </div>
-      <button className="primary-button wide" onClick={onContinue}>Find care with this plan <ArrowRight size={18} /></button>
+      <button className="primary-button wide" onClick={onContinue}>Search live providers <ArrowRight size={18} /></button>
     </section>
   )
 }
 
-function EstimateCard({ estimate, best }: { estimate: CostEstimate; best: boolean }) {
-  const { provider } = estimate
+function ProviderCard({ provider }: { provider: DirectoryProvider }) {
+  const fullAddress = [provider.address, provider.city, provider.state, provider.postalCode].filter(Boolean).join(', ')
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress || provider.name)}`
+  const npiUrl = `https://npiregistry.cms.hhs.gov/provider-view/${provider.npi}`
+  const initials = provider.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+
   return (
-    <article className={`provider-card ${best ? 'best' : ''}`}>
-      {best && <div className="best-badge"><Sparkles size={14} /> Lowest estimated cost</div>}
+    <article className="provider-card">
       <div className="provider-top">
-        <div className="avatar">{provider.name.split(' ').slice(1).map((v) => v[0]).join('')}</div>
-        <div className="provider-identity"><h3>{provider.name}</h3><p>{provider.practice}</p><span>{provider.specialty}</span></div>
-        <div className="cost"><small>YOU MAY PAY</small><strong>{currency.format(estimate.low)}–{currency.format(estimate.high)}</strong><span>estimated</span></div>
+        <div className="avatar">{provider.providerType === 'organization' ? <Building2 size={20} /> : initials || <UserRound size={20} />}</div>
+        <div className="provider-identity">
+          <h3>{provider.name}{provider.credential ? `, ${provider.credential}` : ''}</h3>
+          <p>{provider.specialty}</p>
+          <span>NPI {provider.npi}</span>
+        </div>
+        <span className="registry-badge"><BadgeCheck size={15} /> CMS listed</span>
       </div>
-      <div className="provider-meta">
-        <span><Star size={15} fill="currentColor" /> {provider.rating}</span>
-        <span><MapPin size={15} /> {provider.distance} mi</span>
-        <span><CalendarDays size={15} /> {provider.nextAvailable}</span>
+      <div className="provider-details">
+        <div><MapPin size={17} /><span>{fullAddress || 'Practice address not listed'}</span></div>
+        <div><Phone size={17} /><span>{provider.phone || 'Phone not listed'}</span></div>
       </div>
-      <div className="network-row">
-        <span className={provider.networkStatus === 'confirmed' ? 'confirmed' : 'verify'}>
-          {provider.networkStatus === 'confirmed' ? <BadgeCheck size={16} /> : <Info size={16} />}
-          {provider.networkStatus === 'confirmed' ? 'In-network match' : 'Likely in-network — verify'}
-        </span>
-        <span>{provider.acceptingNewPatients ? 'Accepting new patients' : 'Call for availability'}</span>
+      <div className="verification-row">
+        <Info size={17} />
+        <div><strong>Coverage and cost need verification</strong><p>The public registry does not show insurance network status, prices, appointment availability, or whether new patients are accepted.</p></div>
       </div>
-      <div className="why"><strong>How we estimated this</strong><p>{estimate.explanation} Final billing depends on services received.</p></div>
       <div className="card-actions">
-        <button className="outline-button"><Phone size={16} /> Call to verify</button>
-        <button className="dark-button">View details <ArrowRight size={16} /></button>
+        {provider.phone && <a className="outline-button" href={`tel:${provider.phone.replace(/\D/g, '')}`}><Phone size={16} /> Call office</a>}
+        <a className="outline-button" href={mapsUrl} target="_blank" rel="noreferrer"><Navigation size={16} /> Directions</a>
+        <a className="dark-button" href={npiUrl} target="_blank" rel="noreferrer">View NPI <ExternalLink size={15} /></a>
       </div>
     </article>
   )
@@ -98,18 +101,19 @@ export default function App() {
   const [specialty, setSpecialty] = useState('Dermatology')
   const [zip, setZip] = useState('85254')
   const [remainingDeductible, setRemainingDeductible] = useState(900)
+  const [providers, setProviders] = useState<DirectoryProvider[]>([])
+  const [resultCount, setResultCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const estimates = useMemo(() => {
-    if (!plan) return []
-    return rankProviders(providers.filter((item) => item.specialty === specialty), plan, remainingDeductible)
-  }, [plan, specialty, remainingDeductible])
-
   async function processFile(file?: File) {
     if (!file) return
+    if (file.size > 25 * 1024 * 1024) {
+      setError('That file is larger than 25 MB. Try a smaller PDF.')
+      return
+    }
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       setError('Please choose a PDF plan document.')
       return
@@ -118,10 +122,10 @@ export default function App() {
     setError('')
     try {
       const text = await extractPdfText(file)
-      if (text.trim().length < 30) throw new Error('This PDF may be scanned or contain no selectable text.')
+      if (text.trim().length < 30) throw new Error('This looks like a scanned PDF. You can still browse providers without uploading it.')
       setPlan(parsePlan(text, file.name))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'We could not read that PDF.')
+      setError(caught instanceof Error ? caught.message : 'We could not read that PDF. You can still browse providers.')
     } finally {
       setLoading(false)
     }
@@ -129,21 +133,52 @@ export default function App() {
 
   function useDemo() {
     setLoading(true)
-    window.setTimeout(() => { setPlan(samplePlan); setLoading(false) }, 550)
+    window.setTimeout(() => { setPlan(samplePlan); setLoading(false) }, 450)
+  }
+
+  function browseWithoutDocument() {
+    setPlan(null)
+    setError('')
+    setStep('search')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function findCare() {
-    if (!plan) return
+    if (!/^\d{5}$/.test(zip)) {
+      setError('Enter a valid 5-digit ZIP code.')
+      return
+    }
+
     setLoading(true)
-    try { await saveSearch({ plan, specialty, zip, remainingDeductible }) } catch { /* Search still works if persistence fails. */ }
-    window.setTimeout(() => { setStep('results'); setLoading(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }, 650)
+    setError('')
+    setProviders([])
+    setStep('results')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15000)
+    void saveSearch({ plan, specialty, zip, remainingDeductible }).catch(() => undefined)
+
+    try {
+      const result = await searchProviders(specialty, zip, controller.signal)
+      setProviders(result.providers)
+      setResultCount(result.total)
+    } catch (caught) {
+      const message = caught instanceof Error && caught.name === 'AbortError'
+        ? 'The provider directory took too long to respond. Please try again.'
+        : caught instanceof Error ? caught.message : 'We could not load providers right now.'
+      setError(message)
+    } finally {
+      window.clearTimeout(timeout)
+      setLoading(false)
+    }
   }
 
   return (
     <div className="app-shell">
       <header>
         <Logo />
-        <nav><a href="#how">How it works</a><a href="#privacy">Privacy</a><span><ShieldCheck size={15} /> Your document stays private</span></nav>
+        <nav><a href="#how">How it works</a><a href="#privacy">Privacy</a><span><ShieldCheck size={15} /> PDF stays in your browser</span></nav>
       </header>
 
       <main>
@@ -153,21 +188,22 @@ export default function App() {
           <section className="hero animate-in">
             <div className="hero-copy">
               <span className="eyebrow"><Sparkles size={15} /> Insurance, made useful</span>
-              <h1>Find care that fits<br /><em>your</em> health plan.</h1>
-              <p>Upload your plan document. We’ll explain your benefits, find matching providers, and estimate what you may pay.</p>
-              <div className="trust-row"><span><Check /> Source citations</span><span><Check /> No surprise guesses</span><span><Check /> You stay in control</span></div>
+              <h1>Find care that fits<br /><em>your</em> situation.</h1>
+              <p>Understand your plan when you have it—or search the live national provider directory without insurance or a PDF.</p>
+              <div className="trust-row"><span><Check /> Live CMS listings</span><span><Check /> Source citations</span><span><Check /> No fake prices</span></div>
             </div>
             <div className="upload-card">
-              <div className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); processFile(e.dataTransfer.files[0]) }}>
-                <input ref={inputRef} type="file" accept="application/pdf" onChange={(e) => processFile(e.target.files?.[0])} />
+              <div className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); processFile(event.dataTransfer.files[0]) }}>
+                <input ref={inputRef} type="file" accept="application/pdf" onChange={(event) => processFile(event.target.files?.[0])} />
                 {loading ? <LoaderCircle className="spinner" size={34} /> : <span className="upload-icon"><UploadCloud size={28} /></span>}
                 <h2>{loading ? 'Reading your plan…' : 'Upload your insurance PDF'}</h2>
                 <p>Summary of Benefits & Coverage (SBC)<br />or Evidence of Coverage (EOC)</p>
                 <button className="primary-button" onClick={() => inputRef.current?.click()} disabled={loading}>Choose PDF</button>
                 <small>PDF up to 25 MB · processed in your browser</small>
               </div>
-              <div className="or"><span>or</span></div>
-              <button className="demo-button" onClick={useDemo} disabled={loading}><FileText size={19} /><span><strong>Try with a sample plan</strong><small>No insurance document needed</small></span><ArrowRight size={18} /></button>
+              <div className="or"><span>or continue without a document</span></div>
+              <button className="browse-button" onClick={browseWithoutDocument} disabled={loading}><Search size={20} /><span><strong>Browse providers now</strong><small>Works with no PDF or no insurance</small></span><ArrowRight size={18} /></button>
+              <button className="demo-button compact" onClick={useDemo} disabled={loading}><FileText size={18} /><span><strong>Try a sample insurance plan</strong><small>See how document analysis works</small></span><ArrowRight size={17} /></button>
               {error && <p className="error"><Info size={16} /> {error}</p>}
             </div>
           </section>
@@ -175,47 +211,60 @@ export default function App() {
 
         {step === 'plan' && plan && <PlanSummary plan={plan} onContinue={() => { setStep('search'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />}
 
-        {step === 'search' && plan && (
+        {step === 'search' && (
           <section className="search-step animate-in">
-            <div className="center-heading"><span className="eyebrow">Tell us what you need</span><h1>What kind of care are you looking for?</h1><p>We’ll use your plan rules to estimate and compare your costs.</p></div>
+            <div className="center-heading"><span className="eyebrow">Live provider directory</span><h1>What kind of care do you need?</h1><p>{plan ? 'We’ll keep your plan details beside the results so you know what to verify.' : 'No insurance document required. Search public CMS provider records near you.'}</p></div>
             <div className="search-panel">
-              <label className="field"><span>Specialty or care</span><div><Search size={19} /><select value={specialty} onChange={(e) => setSpecialty(e.target.value)}>{specialties.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={18} /></div></label>
-              <div className="quick-picks">{specialties.map((item) => <button className={specialty === item ? 'selected' : ''} onClick={() => setSpecialty(item)} key={item}>{item}</button>)}</div>
-              <div className="two-fields">
-                <label className="field"><span>Your ZIP code</span><div><LocateFixed size={19} /><input value={zip} onChange={(e) => setZip(e.target.value.replace(/\D/g, '').slice(0, 5))} inputMode="numeric" /></div></label>
-                <label className="field"><span>Deductible remaining</span><div><span className="dollar">$</span><input type="number" min="0" value={remainingDeductible} onChange={(e) => setRemainingDeductible(Number(e.target.value))} /></div><small>Find this in your insurer portal. An estimate is okay.</small></label>
+              <label className="field"><span>Specialty or care</span><div><Search size={19} /><select value={specialty} onChange={(event) => setSpecialty(event.target.value)}>{specialties.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={18} /></div></label>
+              <div className="quick-picks">{specialties.slice(0, 5).map((item) => <button type="button" className={specialty === item ? 'selected' : ''} onClick={() => setSpecialty(item)} key={item}>{item}</button>)}</div>
+              <div className={plan ? 'two-fields' : ''}>
+                <label className="field"><span>Your ZIP code</span><div><LocateFixed size={19} /><input aria-label="ZIP code" value={zip} onChange={(event) => setZip(event.target.value.replace(/\D/g, '').slice(0, 5))} inputMode="numeric" placeholder="5-digit ZIP" /></div></label>
+                {plan && <label className="field"><span>Deductible remaining</span><div><span className="dollar">$</span><input type="number" min="0" value={remainingDeductible} onChange={(event) => setRemainingDeductible(Math.max(0, Number(event.target.value)))} /></div><small>Used only as context; CMS does not publish visit prices.</small></label>}
               </div>
-              <div className="plan-pill"><ShieldCheck size={18} /><div><strong>Using {plan.planName}</strong><span>{plan.specialistCopay ? `$${plan.specialistCopay} specialist copay` : `${plan.specialistCoinsurance}% specialist coinsurance`} · {plan.referralRequired ? 'Referral required' : 'No referral found'}</span></div><button onClick={() => setStep('plan')}>Review</button></div>
-              <button className="primary-button wide" onClick={findCare} disabled={loading || zip.length !== 5}>{loading ? <><LoaderCircle className="spinner" size={18} /> Comparing your options…</> : <>Compare care options <ArrowRight size={18} /></>}</button>
+              {plan ? (
+                <div className="plan-pill"><ShieldCheck size={18} /><div><strong>Using {plan.planName}</strong><span>{plan.specialistCopay ? `$${plan.specialistCopay} specialist copay` : `${plan.specialistCoinsurance}% specialist coinsurance`} · Network still needs verification</span></div><button onClick={() => setStep('plan')}>Review</button></div>
+              ) : (
+                <div className="plan-pill neutral"><Search size={18} /><div><strong>Searching without a plan</strong><span>You can browse any provider, then call to ask about self-pay or insurance.</span></div><button onClick={() => { setStep('plan'); setError('') }}>Add PDF</button></div>
+              )}
+              {error && <p className="inline-error"><Info size={16} /> {error}</p>}
+              <button className="primary-button wide" onClick={findCare} disabled={loading || zip.length !== 5}>{loading ? <><LoaderCircle className="spinner" size={18} /> Searching CMS…</> : <>Search live providers <ArrowRight size={18} /></>}</button>
               <p className="storage-note"><ShieldCheck size={14} /> Search history saved to {storageMode.toLowerCase()}</p>
             </div>
           </section>
         )}
 
-        {step === 'results' && plan && (
+        {step === 'results' && (
           <section className="results-step animate-in">
-            <div className="results-heading"><div><span className="eyebrow">Your care options</span><h1>{specialty} near {zip}</h1><p>Ranked by your estimated cost—not the provider’s sticker price.</p></div><button className="outline-button" onClick={() => setStep('search')}><Search size={16} /> Edit search</button></div>
-            <div className="estimate-note"><Info size={18} /><div><strong>These are estimates, not guarantees.</strong><p>Always confirm network status and price with both the provider and your insurer before receiving care.</p></div></div>
+            <div className="results-heading"><div><span className="eyebrow">CMS NPI Registry</span><h1>{specialty} near {zip}</h1><p>{loading ? 'Searching the national provider registry…' : error ? 'The search could not be completed.' : `${providers.length} provider${providers.length === 1 ? '' : 's'} shown${resultCount > providers.length ? ` · ${resultCount} registry matches` : ''}`}</p></div><button className="outline-button" onClick={() => { setStep('search'); setError('') }}><Search size={16} /> Edit search</button></div>
+            <div className="estimate-note"><Info size={18} /><div><strong>A directory listing is not proof of coverage.</strong><p>Call the provider and your insurer before care. Ask about network participation, referral rules, availability, and your expected price.</p></div></div>
             <div className="results-layout">
-              <div className="provider-list">
-                {estimates.length ? estimates.map((estimate, index) => <EstimateCard estimate={estimate} best={index === 0} key={estimate.provider.id} />) : <div className="empty-state"><Stethoscope size={30} /><h3>No demo providers for this specialty</h3><p>Try Dermatology, Primary care, or Cardiology.</p></div>}
+              <div className="provider-list" aria-live="polite">
+                {loading && <div className="loading-state"><LoaderCircle className="spinner" size={32} /><h3>Finding providers near you</h3><p>Checking current public CMS registry records…</p></div>}
+                {!loading && error && <div className="empty-state error-state"><Info size={30} /><h3>We couldn’t load the directory</h3><p>{error}</p><button className="primary-button" onClick={findCare}><RefreshCw size={16} /> Try again</button></div>}
+                {!loading && !error && providers.map((provider) => <ProviderCard provider={provider} key={provider.npi} />)}
+                {!loading && !error && providers.length === 0 && <div className="empty-state"><Stethoscope size={30} /><h3>No matching providers found</h3><p>Try a nearby ZIP code or a broader specialty such as Primary care.</p><button className="outline-button" onClick={() => setStep('search')}><Search size={16} /> Change search</button></div>}
               </div>
               <aside>
-                <span className="eyebrow">Your plan math</span><h3>Why costs differ</h3>
-                <div className="math-row"><span>Specialist benefit</span><strong>{plan.specialistCopay ? `$${plan.specialistCopay} copay` : `${plan.specialistCoinsurance}%`}</strong></div>
-                <div className="math-row"><span>Deductible left</span><strong>{currency.format(remainingDeductible)}</strong></div>
-                <div className="math-row"><span>Referral</span><strong>{plan.referralRequired ? 'Required' : 'Not required'}</strong></div>
-                <hr />
-                <p>Facility fees can make hospital-based care cost more than an independent clinic, even when both are in-network.</p>
-                <div className="citation-mini"><FileCheck2 size={17} /><span>Plan benefit backed by <strong>page {plan.citations.find((c) => c.field === 'Specialist visit')?.page ?? 2}</strong></span></div>
+                {plan ? <>
+                  <span className="eyebrow">Your plan context</span><h3>Questions to ask</h3>
+                  <div className="math-row"><span>Specialist benefit</span><strong>{plan.specialistCopay ? `$${plan.specialistCopay} copay` : `${plan.specialistCoinsurance}% after deductible`}</strong></div>
+                  <div className="math-row"><span>Deductible left</span><strong>{currency.format(remainingDeductible)}</strong></div>
+                  <div className="math-row"><span>Referral</span><strong>{plan.referralRequired === null ? 'Verify' : plan.referralRequired ? 'Required' : 'Not required'}</strong></div>
+                  <hr /><p>Give your insurer the provider’s NPI and address. Ask whether this exact location is in-network and request an estimate for your visit.</p>
+                  <div className="citation-mini"><FileCheck2 size={17} /><span>Benefit found in your uploaded plan</span></div>
+                </> : <>
+                  <span className="eyebrow">No insurance needed</span><h3>Before you book</h3>
+                  <ol className="checklist"><li>Ask if new patients are accepted.</li><li>Request the cash or self-pay price.</li><li>Ask about facility and lab fees.</li><li>Confirm the office address.</li></ol>
+                  <hr /><p>If you have insurance but no PDF, give the office your member ID and ask them to verify your benefits.</p>
+                </>}
               </aside>
             </div>
-            <div className="demo-disclosure"><strong>Version 1 demo data</strong><p>The provider directory and negotiated prices shown here are synthetic. Connect an insurer directory and Transparency in Coverage dataset before real-world use.</p></div>
+            <div className="source-disclosure"><BadgeCheck size={18} /><div><strong>Live public data from the CMS NPI Registry</strong><p>Records identify registered healthcare providers. CMS does not certify quality, coverage, pricing, or availability through this dataset.</p></div></div>
           </section>
         )}
       </main>
 
-      <footer id="privacy"><Logo /><p>InNet helps you understand options. It does not provide medical advice or guarantee coverage.</p><span><Clock3 size={15} /> Version 1.0</span></footer>
+      <footer id="privacy"><Logo /><p>InNet helps you find and understand options. It does not provide medical advice or guarantee coverage.</p><span><Clock3 size={15} /> Version 2.0</span></footer>
     </div>
   )
 }
