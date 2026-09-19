@@ -1,4 +1,4 @@
-# InNet — Version 2
+# InNet — Version 2.1
 
 InNet is an insurance-aware care finder that also works without insurance or a plan document. It can explain key benefits from an uploaded SBC/EOC and search current public provider records by specialty and ZIP code.
 
@@ -10,12 +10,14 @@ InNet is an insurance-aware care finder that also works without insurance or a p
 - Search without insurance or a PDF
 - Search after uploading an insurance plan
 - Client-side PDF text extraction (the document is not uploaded)
-- Heuristic extraction of deductible, out-of-pocket maximum, specialist copay/coinsurance, and referral language
-- Page-level citations for extracted plan details
+- Label-specific extraction of individual/family deductible, individual/family out-of-pocket maximum, PCP, specialist, urgent care, emergency room, common prescription tiers, and referral language
+- Exact page citations for every extracted value; unverified fields stay explicitly unknown
 - Real provider names, specialties, practice addresses, phone numbers, and NPIs
+- Verified US ZIP lookup, 5–100 mile radius filtering, ZIP-centroid distance estimates, provider-type filters, sorting, and pagination
 - Call, map directions, and official NPI-record actions
 - Invalid ZIP, unsupported specialty, scanned PDF, timeout, API failure, and no-result states
-- Optional Supabase search-history persistence with a local-storage fallback
+- Privacy and terms pages, working navigation, and an application footer
+- Minimal search-history settings stored only in the browser; PDFs and extracted benefits are never sent to InNet
 - Responsive interface for phones, tablets, and desktops
 
 ## Data honesty
@@ -35,7 +37,8 @@ InNet never invents those values. Users are prompted to verify the exact NPI and
 - React 19, TypeScript, and Vite frontend
 - PDF.js for in-browser document reading
 - `/api/providers` serverless function as a same-origin, cached proxy to the CMS NPI Registry API
-- Supabase is optional; local storage is used when credentials are absent
+- Zippopotam.us postal data for US ZIP validation and ZIP-centroid distance estimates
+- Browser local storage for up to ten recent non-medical search settings
 - Vitest and ESLint for automated checks
 - Vercel for the frontend and serverless API
 
@@ -50,21 +53,6 @@ pnpm dev
 
 The Vite development server runs the frontend. To exercise the serverless route locally, use a Vercel-compatible development environment or deploy a preview.
 
-## Optional Supabase setup
-
-The application works without a database. When Supabase environment variables are absent, up to ten recent searches are stored on the user’s device.
-
-1. Create a free Supabase project.
-2. Run [`supabase/schema.sql`](supabase/schema.sql) in its SQL editor.
-3. Add these values to `.env.local`:
-
-```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
-```
-
-The current policy allows anonymous inserts but not anonymous reads. Add authentication and user-owned row-level-security policies before storing production health or membership data.
-
 ## Production roadmap
 
 - Add insurer directory APIs for verified member-specific network status
@@ -72,4 +60,4 @@ The current policy allows anonymous inserts but not anonymous reads. Add authent
 - Add member authentication and current deductible accumulators
 - Add OCR for image-only insurance PDFs
 - Add appointment availability integrations
-- Complete legal, privacy, accessibility, and security reviews
+- Complete third-party legal, accessibility, security, and clinical-safety reviews

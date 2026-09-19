@@ -13,8 +13,8 @@ export const specialties = [
   'Physical therapy',
 ]
 
-export async function searchProviders(specialty: string, zip: string, signal?: AbortSignal) {
-  const params = new URLSearchParams({ specialty, zip })
+export async function searchProviders(specialty: string, zip: string, radius: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ specialty, zip, radius: String(radius) })
   const response = await fetch(`/api/providers?${params}`, {
     headers: { Accept: 'application/json' },
     signal,

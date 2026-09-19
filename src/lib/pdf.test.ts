@@ -34,4 +34,20 @@ describe('parsePlan', () => {
     expect(plan.specialistCoinsurance).toBeNull()
     expect(plan.citations).toHaveLength(2)
   })
+
+  it('uses the amount following each label instead of reusing the first amount', () => {
+    const valid = [
+      'Summary of Benefits and Coverage',
+      'Overall Deductible: $1,500 individual. Out-of-pocket maximum: $6,000 individual.',
+      'Specialist visit: $50 copay. Covered services use the in-network health plan.',
+    ].join(' ')
+
+    const plan = parsePlan(valid, 'test-plan.pdf')
+
+    expect(plan.deductible).toBe(1500)
+    expect(plan.outOfPocketMax).toBe(6000)
+    expect(plan.specialistCopay).toBe(50)
+    expect(new Set(plan.citations.map((item) => item.excerpt)).size).toBe(3)
+    expect(plan.citations.every((item) => !/\$[\d,]*…$/.test(item.excerpt))).toBe(true)
+  })
 })
