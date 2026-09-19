@@ -4,21 +4,6 @@ import type { Citation, PlanRules } from '../types'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
-export const samplePlan: PlanRules = {
-  planName: 'Desert Choice Silver 2500',
-  networkName: 'Desert Choice PPO',
-  deductible: 2500,
-  outOfPocketMax: 7800,
-  specialistCopay: 45,
-  specialistCoinsurance: 20,
-  referralRequired: false,
-  citations: [
-    { field: 'Specialist visit', value: '$45 copay', page: 2, excerpt: 'Specialist visit — $45 copay per visit; deductible does not apply.' },
-    { field: 'Deductible', value: '$2,500', page: 1, excerpt: 'Overall deductible: $2,500 individual / $5,000 family.' },
-    { field: 'Referral', value: 'Not required', page: 3, excerpt: 'You do not need a referral to see an in-network specialist.' },
-  ],
-}
-
 function moneyNear(text: string, terms: string[]): number | null {
   const lines = text.split(/\n| {2,}/).filter(Boolean)
   const line = lines.find((value) => terms.some((term) => value.toLowerCase().includes(term)))
@@ -36,6 +21,21 @@ function citation(text: string, field: string, value: string, terms: string[]): 
   return null
 }
 
+function looksLikeInsurancePlan(text: string) {
+  const strongDocumentMarker = /(summary of benefits(?: and coverage)?|evidence of coverage|schedule of benefits|certificate of coverage)/i.test(text)
+  const insuranceSignals = [
+    /\bdeductible\b/i,
+    /out[- ]of[- ]pocket/i,
+    /\bcoinsurance\b/i,
+    /\bcopay(?:ment)?\b/i,
+    /\bin[- ]network\b/i,
+    /\bcovered services\b/i,
+    /\bhealth plan\b/i,
+  ].filter((pattern) => pattern.test(text)).length
+
+  return strongDocumentMarker ? insuranceSignals >= 2 : insuranceSignals >= 4
+}
+
 export async function extractPdfText(file: File): Promise<string> {
   const bytes = await file.arrayBuffer()
   const document = await pdfjs.getDocument({ data: bytes }).promise
@@ -50,20 +50,36 @@ export async function extractPdfText(file: File): Promise<string> {
 
 export function parsePlan(text: string, filename: string): PlanRules {
   const flattened = text.replaceAll('\n---PAGE_BREAK---\n', '\n')
-  const deductible = moneyNear(flattened, ['overall deductible', 'deductible']) ?? samplePlan.deductible
-  const oop = moneyNear(flattened, ['out-of-pocket limit', 'out of pocket maximum', 'out-of-pocket maximum']) ?? samplePlan.outOfPocketMax
+  if (!looksLikeInsurancePlan(flattened)) {
+    throw new Error('This does not appear to be a health insurance SBC or Evidence of Coverage. Upload the correct plan document, or browse providers without it.')
+  }
+
+  const deductible = moneyNear(flattened, ['overall deductible', 'deductible'])
+  const oop = moneyNear(flattened, ['out-of-pocket limit', 'out of pocket maximum', 'out-of-pocket maximum'])
   const specialistCopay = moneyNear(flattened, ['specialist visit', 'specialist'])
   const coinsuranceMatch = flattened.match(/specialist[^\n]{0,100}?(\d{1,2})%/i)
-  const specialistCoinsurance = coinsuranceMatch ? Number(coinsuranceMatch[1]) : samplePlan.specialistCoinsurance
+  const specialistCoinsurance = coinsuranceMatch ? Number(coinsuranceMatch[1]) : null
   const referralRequired = /referral.{0,30}(required|need)/i.test(flattened)
     ? !/referral.{0,30}(not required|do not need|isn['’]t required)/i.test(flattened)
     : null
+
+  const extractedValues = [deductible, oop, specialistCopay, specialistCoinsurance, referralRequired]
+    .filter((value) => value !== null).length
+  if (extractedValues < 2) {
+    throw new Error('This may be an insurance document, but InNet could not verify enough plan details. Try the SBC or EOC, or browse providers without a PDF.')
+  }
+
   const planName = filename.replace(/\.pdf$/i, '').replaceAll(/[-_]/g, ' ')
   const citations = [
-    citation(text, 'Deductible', `$${deductible.toLocaleString()}`, ['overall deductible', 'deductible']),
-    citation(text, 'Out-of-pocket maximum', `$${oop.toLocaleString()}`, ['out-of-pocket limit', 'out of pocket maximum']),
+    deductible !== null ? citation(text, 'Deductible', `$${deductible.toLocaleString()}`, ['overall deductible', 'deductible']) : null,
+    oop !== null ? citation(text, 'Out-of-pocket maximum', `$${oop.toLocaleString()}`, ['out-of-pocket limit', 'out of pocket maximum']) : null,
     specialistCopay !== null ? citation(text, 'Specialist visit', `$${specialistCopay}`, ['specialist visit', 'specialist']) : null,
-    citation(text, 'Referral', referralRequired === true ? 'Required' : referralRequired === false ? 'Not required' : 'Not found', ['referral']),
+    specialistCopay === null && specialistCoinsurance !== null
+      ? citation(text, 'Specialist visit', `${specialistCoinsurance}% coinsurance`, ['specialist visit', 'specialist'])
+      : null,
+    referralRequired !== null
+      ? citation(text, 'Referral', referralRequired ? 'Required' : 'Not required', ['referral'])
+      : null,
   ].filter((item): item is Citation => item !== null)
 
   return {

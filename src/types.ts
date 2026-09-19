@@ -8,10 +8,10 @@ export type Citation = {
 export type PlanRules = {
   planName: string
   networkName: string
-  deductible: number
-  outOfPocketMax: number
+  deductible: number | null
+  outOfPocketMax: number | null
   specialistCopay: number | null
-  specialistCoinsurance: number
+  specialistCoinsurance: number | null
   referralRequired: boolean | null
   citations: Citation[]
 }

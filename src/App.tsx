@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import {
   ArrowRight, BadgeCheck, Building2, Check, ChevronDown, CircleDollarSign,
-  Clock3, ExternalLink, FileCheck2, FileText, Info, LoaderCircle, LocateFixed,
+  Clock3, ExternalLink, FileCheck2, Info, LoaderCircle, LocateFixed,
   MapPin, Navigation, Phone, RefreshCw, Search, ShieldCheck, Sparkles,
   Stethoscope, UploadCloud, UserRound,
 } from 'lucide-react'
-import { extractPdfText, parsePlan, samplePlan } from './lib/pdf'
+import { extractPdfText, parsePlan } from './lib/pdf'
 import { searchProviders, specialties } from './lib/providers'
 import { saveSearch, storageMode } from './lib/storage'
 import type { DirectoryProvider, PlanRules } from './types'
@@ -13,6 +13,16 @@ import type { DirectoryProvider, PlanRules } from './types'
 type Step = 'plan' | 'search' | 'results'
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+
+function moneyOrUnknown(value: number | null) {
+  return value === null ? 'Not found' : currency.format(value)
+}
+
+function specialistBenefit(plan: PlanRules) {
+  if (plan.specialistCopay !== null) return `${currency.format(plan.specialistCopay)} copay`
+  if (plan.specialistCoinsurance !== null) return `${plan.specialistCoinsurance}% after deductible`
+  return 'Not found'
+}
 
 function Logo() {
   return <button className="logo logo-button" onClick={() => window.location.reload()} aria-label="Return to InNet home"><span className="logo-mark"><Check size={16} strokeWidth={3} /></span><span>InNet</span></button>
@@ -36,15 +46,15 @@ function Progress({ step }: { step: Step }) {
 function PlanSummary({ plan, onContinue }: { plan: PlanRules; onContinue: () => void }) {
   return (
     <section className="plan-summary animate-in">
-      <div className="success-banner"><FileCheck2 size={20} /><div><strong>Plan understood</strong><span>We found {plan.citations.length} source-backed details</span></div></div>
+      <div className="success-banner"><FileCheck2 size={20} /><div><strong>Verified plan details</strong><span>We found {plan.citations.length} source-backed details</span></div></div>
       <div className="plan-heading">
         <div><span className="eyebrow">Your plan</span><h2>{plan.planName}</h2><p>{plan.networkName}</p></div>
         <button className="text-button" onClick={() => window.location.reload()}>Replace PDF</button>
       </div>
       <div className="benefit-grid">
-        <article><CircleDollarSign /><span>Annual deductible</span><strong>{currency.format(plan.deductible)}</strong></article>
-        <article><ShieldCheck /><span>Out-of-pocket max</span><strong>{currency.format(plan.outOfPocketMax)}</strong></article>
-        <article><Stethoscope /><span>Specialist visit</span><strong>{plan.specialistCopay ? `${currency.format(plan.specialistCopay)} copay` : `${plan.specialistCoinsurance}% after deductible`}</strong></article>
+        <article><CircleDollarSign /><span>Annual deductible</span><strong>{moneyOrUnknown(plan.deductible)}</strong></article>
+        <article><ShieldCheck /><span>Out-of-pocket max</span><strong>{moneyOrUnknown(plan.outOfPocketMax)}</strong></article>
+        <article><Stethoscope /><span>Specialist visit</span><strong>{specialistBenefit(plan)}</strong></article>
         <article><Navigation /><span>Specialist referral</span><strong>{plan.referralRequired === null ? 'Verify with plan' : plan.referralRequired ? 'Required' : 'Not required'}</strong></article>
       </div>
       <div className="citation-block">
@@ -131,11 +141,6 @@ export default function App() {
     }
   }
 
-  function useDemo() {
-    setLoading(true)
-    window.setTimeout(() => { setPlan(samplePlan); setLoading(false) }, 450)
-  }
-
   function browseWithoutDocument() {
     setPlan(null)
     setError('')
@@ -203,7 +208,6 @@ export default function App() {
               </div>
               <div className="or"><span>or continue without a document</span></div>
               <button className="browse-button" onClick={browseWithoutDocument} disabled={loading}><Search size={20} /><span><strong>Browse providers now</strong><small>Works with no PDF or no insurance</small></span><ArrowRight size={18} /></button>
-              <button className="demo-button compact" onClick={useDemo} disabled={loading}><FileText size={18} /><span><strong>Try a sample insurance plan</strong><small>See how document analysis works</small></span><ArrowRight size={17} /></button>
               {error && <p className="error"><Info size={16} /> {error}</p>}
             </div>
           </section>
@@ -222,7 +226,7 @@ export default function App() {
                 {plan && <label className="field"><span>Deductible remaining</span><div><span className="dollar">$</span><input type="number" min="0" value={remainingDeductible} onChange={(event) => setRemainingDeductible(Math.max(0, Number(event.target.value)))} /></div><small>Used only as context; CMS does not publish visit prices.</small></label>}
               </div>
               {plan ? (
-                <div className="plan-pill"><ShieldCheck size={18} /><div><strong>Using {plan.planName}</strong><span>{plan.specialistCopay ? `$${plan.specialistCopay} specialist copay` : `${plan.specialistCoinsurance}% specialist coinsurance`} · Network still needs verification</span></div><button onClick={() => setStep('plan')}>Review</button></div>
+                <div className="plan-pill"><ShieldCheck size={18} /><div><strong>Using {plan.planName}</strong><span>{specialistBenefit(plan)} · Network still needs verification</span></div><button onClick={() => setStep('plan')}>Review</button></div>
               ) : (
                 <div className="plan-pill neutral"><Search size={18} /><div><strong>Searching without a plan</strong><span>You can browse any provider, then call to ask about self-pay or insurance.</span></div><button onClick={() => { setStep('plan'); setError('') }}>Add PDF</button></div>
               )}
@@ -247,7 +251,7 @@ export default function App() {
               <aside>
                 {plan ? <>
                   <span className="eyebrow">Your plan context</span><h3>Questions to ask</h3>
-                  <div className="math-row"><span>Specialist benefit</span><strong>{plan.specialistCopay ? `$${plan.specialistCopay} copay` : `${plan.specialistCoinsurance}% after deductible`}</strong></div>
+                  <div className="math-row"><span>Specialist benefit</span><strong>{specialistBenefit(plan)}</strong></div>
                   <div className="math-row"><span>Deductible left</span><strong>{currency.format(remainingDeductible)}</strong></div>
                   <div className="math-row"><span>Referral</span><strong>{plan.referralRequired === null ? 'Verify' : plan.referralRequired ? 'Required' : 'Not required'}</strong></div>
                   <hr /><p>Give your insurer the provider’s NPI and address. Ask whether this exact location is in-network and request an estimate for your visit.</p>
