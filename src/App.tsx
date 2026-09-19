@@ -361,7 +361,7 @@ function CareApp() {
 }
 
 export default function App() {
-  if (window.location.pathname === '/privacy') return <LegalPage page="privacy" />
-  if (window.location.pathname === '/terms') return <LegalPage page="terms" />
+  if (window.location.pathname === '/privacy' || window.location.hash === '#privacy') return <LegalPage page="privacy" />
+  if (window.location.pathname === '/terms' || window.location.hash === '#terms') return <LegalPage page="terms" />
   return <CareApp />
 }
